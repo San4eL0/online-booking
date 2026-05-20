@@ -1,29 +1,35 @@
 <?php
 session_start();
-
-require_once __DIR__ . '/../src/helpers.php';
-require_once __DIR__ . '/../src/Controllers/ClientController.php';
-require_once __DIR__ . '/../src/Controllers/ServiceController.php';
-require_once __DIR__ . '/../src/Controllers/SpecialistController.php';
+require_once '../config/database.php';
+require_once '../src/helpers.php';
 
 $entity = $_GET['entity'] ?? 'client';
 $action = $_GET['action'] ?? 'list';
+$id = $_GET['id'] ?? null;
 
-$controllerMap = [
-    'client' => ClientController::class,
-    'service' => ServiceController::class,
-    'specialist' => SpecialistController::class
+// Маппинг сущностей на контроллеры
+$controllers = [
+    'client' => 'ClientController',
+    'service' => 'ServiceController',
+    'specialist' => 'SpecialistController',
 ];
 
-if (!isset($controllerMap[$entity])) {
-    redirect('index.php?entity=client&action=list', 'Неизвестная сущность', 'error');
+if (!isset($controllers[$entity])) {
+    die('Неверная сущность');
 }
 
-$controllerClass = $controllerMap[$entity];
-$controller = new $controllerClass();
+$controllerClass = $controllers[$entity];
+require_once "../src/Controllers/{$controllerClass}.php";
 
-if (!method_exists($controller, $action)) {
-    redirect('index.php?entity=' . $entity . '&action=list', 'Неизвестное действие', 'error');
+$controller = new $controllerClass($pdo);
+
+// Вызов метода (list, create, edit, delete, view)
+if (method_exists($controller, $action)) {
+    if ($id) {
+        $controller->$action($id);
+    } else {
+        $controller->$action();
+    }
+} else {
+    die('Неверное действие');
 }
-
-$controller->$action();
