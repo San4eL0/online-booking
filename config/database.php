@@ -6,9 +6,9 @@ class Database {
     
     private function __construct() {
         $host = 'localhost';
-        $dbname = 'online_booking';
-        $username = 'root';
-        $password = '';
+        $dbname = 'r95122gp_1';
+        $username = 'r95122gp';
+        $password = 'DB-GitHub1';
         
         $this->pdo = new PDO(
             "mysql:host=$host;dbname=$dbname;charset=utf8mb4",
