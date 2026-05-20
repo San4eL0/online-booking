@@ -1,0 +1,27 @@
+# .htaccess
+RewriteEngine On
+
+# Перенаправление на public папку
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteRule ^(.*)$ /public/$1 [L,QSA]
+
+# Защита от доступа к системным файлам
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<FilesMatch "\.(ini|log|sql|txt|md)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Отключение листинга директорий
+Options -Indexes
+
+# Кодировка по умолчанию
+AddDefaultCharset UTF-8
+
+# Настройка ошибок
+ErrorDocument 404 /index.php?error=404
+ErrorDocument 403 /index.php?error=403
