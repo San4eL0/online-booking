@@ -1,44 +1,36 @@
 <?php
-// src/Controllers/BaseController.php
 abstract class BaseController {
-    protected $entity;
-    protected $title;
+    protected $pdo;
+    protected $repository;
     
+    public function __construct($pdo) {
+        $this->pdo = $pdo;
+    }
+    
+    // Общий метод для рендера вьюх
     protected function render($view, $data = []) {
         extract($data);
-        $flash = getFlashMessage();
-        require_once __DIR__ . '/../Views/layout/header.php';
-        require_once __DIR__ . '/../Views/' . $this->entity . '/' . $view . '.php';
-        require_once __DIR__ . '/../Views/layout/footer.php';
+        require_once __DIR__ . "/../Views/layout/header.php";
+        require_once __DIR__ . "/../Views/{$view}.php";
+        require_once __DIR__ . "/../Views/layout/footer.php";
     }
     
-    protected function getPageParams() {
-        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-        $perPage = 10;
-        $offset = ($page - 1) * $perPage;
-        $sort = isset($_GET['sort']) ? $_GET['sort'] : 'id';
-        $order = isset($_GET['order']) && $_GET['order'] === 'desc' ? 'DESC' : 'ASC';
-        $search = isset($_GET['search']) ? trim($_GET['search']) : '';
-        
-        return [
-            'page' => $page,
-            'perPage' => $perPage,
-            'offset' => $offset,
-            'sort' => $sort,
-            'order' => $order,
-            'search' => $search
-        ];
-    }
-    
-    protected function isPost() {
-        return $_SERVER['REQUEST_METHOD'] === 'POST';
-    }
-    
-    protected function getId() {
-        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-        if ($id <= 0 && isset($_POST['id'])) {
-            $id = (int)$_POST['id'];
+    // Перенаправление с flash-сообщением
+    protected function redirect($url, $message = '', $type = 'success') {
+        if ($message) {
+            $_SESSION['flash'] = ['message' => $message, 'type' => $type];
         }
-        return $id;
+        header("Location: $url");
+        exit;
+    }
+    
+    // Получение flash-сообщения (вызывать в header.php)
+    public static function getFlash() {
+        if (isset($_SESSION['flash'])) {
+            $flash = $_SESSION['flash'];
+            unset($_SESSION['flash']);
+            return $flash;
+        }
+        return null;
     }
 }
