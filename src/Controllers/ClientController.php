@@ -1,193 +1,111 @@
 <?php
-// src/Controllers/ClientController.php
 require_once __DIR__ . '/BaseController.php';
 require_once __DIR__ . '/../Repositories/ClientRepository.php';
 
 class ClientController extends BaseController {
-    private $clientRepo;
-    
-    public function __construct() {
-        $this->entity = 'client';
-        $this->title = 'Клиенты';
-        $this->clientRepo = new ClientRepository();
+    public function __construct($pdo) {
+        parent::__construct($pdo);
+        $this->repository = new ClientRepository($pdo);
     }
     
+    // Список с пагинацией и сортировкой
     public function list() {
-        $params = $this->getPageParams();
+        $page = $_GET['page'] ?? 1;
+        $sort = $_GET['sort'] ?? 'id';
+        $direction = $_GET['dir'] ?? 'ASC';
         
-        if ($params['search']) {
-            $clients = $this->clientRepo->search($params['search'], $params['sort'], $params['order'], $params['perPage'], $params['offset']);
-            $total = $this->clientRepo->getSearchCount($params['search']);
-        } else {
-            $clients = $this->clientRepo->findAll($params['sort'], $params['order'], $params['perPage'], $params['offset']);
-            $total = $this->clientRepo->getCount();
-        }
+        $perPage = 10;
+        $clients = $this->repository->getPaginated($page, $perPage, $sort, $direction);
+        $total = $this->repository->count();
+        $totalPages = ceil($total / $perPage);
         
-        $totalPages = ceil($total / $params['perPage']);
-        
-        $this->render('list', [
+        $this->render('client/index', [
             'clients' => $clients,
-            'currentPage' => $params['page'],
+            'currentPage' => $page,
             'totalPages' => $totalPages,
-            'sort' => $params['sort'],
-            'order' => strtolower($params['order']),
-            'search' => $params['search']
+            'sort' => $sort,
+            'direction' => $direction
         ]);
     }
     
+    // Форма создания
     public function create() {
-        if ($this->isPost()) {
-            if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-                redirect('index.php?action=list&entity=client', 'Неверный CSRF токен', 'error');
-            }
-            
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors = $this->validate($_POST);
-            
             if (empty($errors)) {
-                $data = [
-                    'last_name' => $_POST['last_name'],
-                    'first_name' => $_POST['first_name'],
-                    'middle_name' => $_POST['middle_name'] ?? null,
-                    'phone' => $_POST['phone'],
-                    'email' => $_POST['email'] ?? null,
-                    'birth_date' => $_POST['birth_date'] ?? null
-                ];
-                
-                if ($this->clientRepo->create($data)) {
-                    redirect('index.php?action=list&entity=client', 'Клиент успешно добавлен', 'success');
-                } else {
-                    $errors['general'] = 'Ошибка при добавлении клиента';
-                }
-            }
-        }
-        
-        $this->render('form', [
-            'client' => null,
-            'errors' => $errors ?? [],
-            'csrf_token' => generateCsrfToken()
-        ]);
-    }
-    
-    public function edit() {
-        $id = $this->getId();
-        if ($id <= 0) {
-            redirect('index.php?action=list&entity=client', 'Неверный ID клиента', 'error');
-        }
-        
-        $client = $this->clientRepo->findById($id);
-        if (!$client) {
-            redirect('index.php?action=list&entity=client', 'Клиент не найден', 'error');
-        }
-        
-        if ($this->isPost()) {
-            if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-                redirect('index.php?action=list&entity=client', 'Неверный CSRF токен', 'error');
-            }
-            
-            $errors = $this->validate($_POST);
-            
-            if (empty($errors)) {
-                $data = [
-                    'last_name' => $_POST['last_name'],
-                    'first_name' => $_POST['first_name'],
-                    'middle_name' => $_POST['middle_name'] ?? null,
-                    'phone' => $_POST['phone'],
-                    'email' => $_POST['email'] ?? null,
-                    'birth_date' => $_POST['birth_date'] ?? null
-                ];
-                
-                if ($this->clientRepo->update($id, $data)) {
-                    redirect('index.php?action=list&entity=client', 'Клиент успешно обновлен', 'success');
-                } else {
-                    $errors['general'] = 'Ошибка при обновлении клиента';
-                }
-            }
-        }
-        
-        $this->render('form', [
-            'client' => $client,
-            'errors' => $errors ?? [],
-            'csrf_token' => generateCsrfToken()
-        ]);
-    }
-    
-    public function delete() {
-        $id = $this->getId();
-        if ($id <= 0) {
-            redirect('index.php?action=list&entity=client', 'Неверный ID клиента', 'error');
-        }
-        
-        $client = $this->clientRepo->findById($id);
-        if (!$client) {
-            redirect('index.php?action=list&entity=client', 'Клиент не найден', 'error');
-        }
-        
-        if ($this->isPost()) {
-            if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
-                redirect('index.php?action=list&entity=client', 'Неверный CSRF токен', 'error');
-            }
-            
-            if ($this->clientRepo->hasAppointments($id)) {
-                $this->render('delete', [
-                    'client' => $client,
-                    'error' => 'Невозможно удалить клиента, у которого есть записи на прием',
-                    'csrf_token' => generateCsrfToken()
-                ]);
-                return;
-            }
-            
-            if ($this->clientRepo->delete($id)) {
-                redirect('index.php?action=list&entity=client', 'Клиент успешно удален', 'success');
+                $this->repository->create($_POST);
+                $this->redirect('index.php?entity=client&action=list', 'Клиент добавлен');
             } else {
-                $this->render('delete', [
+                $this->render('client/create', ['errors' => $errors, 'old' => $_POST]);
+            }
+        } else {
+            $this->render('client/create');
+        }
+    }
+    
+    // Форма редактирования
+    public function edit($id) {
+        $client = $this->repository->findById($id);
+        if (!$client) {
+            $this->redirect('index.php?entity=client&action=list', 'Клиент не найден', 'error');
+        }
+        
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $errors = $this->validate($_POST);
+            if (empty($errors)) {
+                $this->repository->update($id, $_POST);
+                $this->redirect('index.php?entity=client&action=list', 'Клиент обновлён');
+            } else {
+                $this->render('client/edit', ['client' => $client, 'errors' => $errors, 'old' => $_POST]);
+            }
+        } else {
+            $this->render('client/edit', ['client' => $client]);
+        }
+    }
+    
+    // Удаление с проверкой связей
+    public function delete($id) {
+        $client = $this->repository->findById($id);
+        if (!$client) {
+            $this->redirect('index.php?entity=client&action=list', 'Клиент не найден', 'error');
+        }
+        
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            // Проверка: есть ли у клиента записи
+            $hasAppointments = $this->repository->hasFutureAppointments($id);
+            if ($hasAppointments) {
+                $this->render('client/delete', [
                     'client' => $client,
-                    'error' => 'Ошибка при удалении клиента',
-                    'csrf_token' => generateCsrfToken()
+                    'error' => 'Нельзя удалить клиента с будущими записями'
                 ]);
                 return;
             }
+            
+            $this->repository->delete($id);
+            $this->redirect('index.php?entity=client&action=list', 'Клиент удалён');
+        } else {
+            $this->render('client/delete', ['client' => $client]);
         }
-        
-        $this->render('delete', [
-            'client' => $client,
-            'csrf_token' => generateCsrfToken()
-        ]);
     }
     
-    public function view() {
-        $id = $this->getId();
-        if ($id <= 0) {
-            redirect('index.php?action=list&entity=client', 'Неверный ID клиента', 'error');
-        }
-        
-        $client = $this->clientRepo->findById($id);
-        if (!$client) {
-            redirect('index.php?action=list&entity=client', 'Клиент не найден', 'error');
-        }
-        
-        $appointmentsCount = $this->clientRepo->getAppointmentsCount($id);
-        
-        $this->render('view', [
-            'client' => $client,
-            'appointmentsCount' => $appointmentsCount
-        ]);
+    // Просмотр деталей (для pull request)
+    public function view($id) {
+        $client = $this->repository->findById($id);
+        $appointments = $this->repository->getAppointments($id);
+        $this->render('client/view', ['client' => $client, 'appointments' => $appointments]);
     }
     
+    // Валидация
     private function validate($data) {
         $errors = [];
-        
-        validateRequired('last_name', $data['last_name'] ?? '', $errors, 'Фамилия');
-        validateRequired('first_name', $data['first_name'] ?? '', $errors, 'Имя');
-        validatePhone($data['phone'] ?? '', $errors);
-        validateEmail($data['email'] ?? '', $errors);
-        
-        if (!empty($data['birth_date'])) {
-            $birthDate = strtotime($data['birth_date']);
-            if ($birthDate > time()) {
-                $errors['birth_date'] = "Дата рождения не может быть в будущем";
-            }
+        if (empty($data['last_name'])) $errors['last_name'] = 'Фамилия обязательна';
+        if (empty($data['first_name'])) $errors['first_name'] = 'Имя обязательно';
+        if (!empty($data['phone']) && !preg_match('/^\+?\d{10,15}$/', $data['phone'])) {
+            $errors['phone'] = 'Неверный формат телефона';
         }
-        
+        if (!empty($data['email']) && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            $errors['email'] = 'Неверный email';
+        }
         return $errors;
     }
 }
